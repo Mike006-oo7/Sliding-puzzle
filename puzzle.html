@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sliding Puzzle Game</title>
+  <style>
+    /* Basic styling for the game */
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f0f8ff;
+      margin: 0;
+      padding: 0;
+    }
+
+    .game-container {
+      margin-top: 50px;
+    }
+
+    .timer {
+      font-size: 18px;
+      margin: 10px;
+    }
+
+    .message {
+      font-size: 20px;
+      font-weight: bold;
+      color: green;
+      margin: 10px;
+      height: 30px; /* Ensures consistent layout */
+    }
+
+    .puzzle-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-template-rows: repeat(3, 100px);
+      gap: 5px;
+      justify-content: center;
+      margin: 20px auto;
+    }
+
+    .puzzle-grid .tile {
+      width: 100px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #87cefa;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .puzzle-grid .empty {
+      background-color: #ffffff;
+      cursor: default;
+    }
+
+    /* Styling the scoreboard */
+    #scoreboard {
+      display: none;
+      margin-top: 20px;
+      background-color: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    #scoreboard h3 {
+      font-size: 24px;
+      color: #333;
+      margin-bottom: 15px;
+      text-align: center;
+      font-family: 'Arial', sans-serif;
+    }
+
+    #scoreList {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .scoreboard-item {
+      font-size: 16px;
+      background-color: #f1f1f1;
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 5px;
+      font-family: 'Arial', sans-serif;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background-color 0.3s ease;
+    }
+
+    .scoreboard-item:hover {
+      background-color: #e0f7fa;
+      cursor: pointer;
+    }
+
+    .scoreboard-item span {
+      font-weight: bold;
+      color: #00796b;
+    }
+
+    .scoreboard-item .date {
+      font-size: 14px;
+      color: #616161;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="game-container">
+    <h1>Sliding Puzzle Game</h1>
+    <div class="timer">Time: <span id="time">0</span> seconds</div>
+    <div class="message" id="message"></div>
+    <div id="nameInputDiv">
+      <input type="text" id="playerName" placeholder="Enter your name" />
+      <button id="startGameBtn">Start Game</button>
+    </div>
+    <div class="puzzle-grid" id="puzzleGrid"></div>
+    <button id="quitButton">Quit</button>
+    <button id="scoreboardBtn">View Scoreboard</button>
+    <div id="scoreboard">
+      <h3>Scoreboard</h3>
+      <div id="scoreList"></div>
+      <button id="clearLeaderboardBtn">Clear Leaderboard</button>
+    </div>
+  </div>
+
+  <script>
+    // Initialize variables
+    const puzzleGrid = document.getElementById("puzzleGrid");
+    const timeDisplay = document.getElementById("time");
+    const messageDisplay = document.getElementById("message");
+    const startGameBtn = document.getElementById("startGameBtn");
+    const quitButton = document.getElementById("quitButton");
+    const scoreboardBtn = document.getElementById("scoreboardBtn");
+    const playerNameInput = document.getElementById("playerName");
+    const scoreboardDiv = document.getElementById("scoreboard");
+    const scoreList = document.getElementById("scoreList");
+    const clearLeaderboardBtn = document.getElementById("clearLeaderboardBtn");
+
+    const password = "Mike1234";  // Password to clear the leaderboard
+
+    let gridSize = 3; // 3x3 grid
+    let tiles = [];
+    let emptyTile = { x: gridSize - 1, y: gridSize - 1 }; // Bottom-right corner
+    let timerInterval;
+    let timeElapsed = 0;
+    let playerName = "";
+    let isGameOver = false; // Flag to track if the game is over
+
+    // Initialize grid
+    function initializeGrid() {
+      tiles = [];
+      for (let row = 0; row < gridSize; row++) {
+        for (let col = 0; col < gridSize; col++) {
+          if (row === gridSize - 1 && col === gridSize - 1) {
+            tiles.push(null); // Empty tile
+          } else {
+            tiles.push({ x: row, y: col, value: row * gridSize + col + 1 });
+          }
+        }
+      }
+      renderGrid();
+      messageDisplay.textContent = ""; // Clear message when initializing
+    }
+
+    // Render grid
+    function renderGrid() {
+      puzzleGrid.innerHTML = "";
+      for (let row = 0; row < gridSize; row++) {
+        for (let col = 0; col < gridSize; col++) {
+          const tile = tiles.find((t) => t && t.x === row && t.y === col);
+          const tileElement = document.createElement("div");
+          tileElement.classList.add("tile");
+
+          if (tile) {
+            tileElement.textContent = tile.value;
+            if (!isGameOver) {
+              tileElement.addEventListener("click", () => moveTile(tile));
+            }
+          } else {
+            tileElement.classList.add("empty");
+          }
+
+          puzzleGrid.appendChild(tileElement);
+        }
+      }
+    }
+
+    // Move tile
+    function moveTile(tile) {
+      if (isGameOver) return; // Prevent movement after game is over
+
+      const dx = Math.abs(tile.x - emptyTile.x);
+      const dy = Math.abs(tile.y - emptyTile.y);
+
+      // Only move if the tile is adjacent to the empty space
+      if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+        [tile.x, emptyTile.x] = [emptyTile.x, tile.x];
+        [tile.y, emptyTile.y] = [emptyTile.y, tile.y];
+        renderGrid();
+
+        // Check for completion after every move
+        if (isSolved()) {
+          clearInterval(timerInterval);
+          messageDisplay.textContent = `Puzzle solved! 🎉`;
+          saveScore();
+          isGameOver = true;
+          renderGrid(); // Prevent any more moves
+        }
+      }
+    }
+
+    // Shuffle grid ensuring solvability
+    function shuffleGrid() {
+      do {
+        // Randomize tiles
+        for (let i = tiles.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          if (tiles[i] && tiles[j]) {
+            [tiles[i], tiles[j]] = [tiles[j], tiles[i]]; // Swap tiles
+          }
+        }
+
+        // Update tile positions
+        let index = 0;
+        for (let row = 0; row < gridSize; row++) {
+          for (let col = 0; col < gridSize; col++) {
+            const tile = tiles[index];
+            if (tile) {
+              tile.x = row;
+              tile.y = col;
+            }
+            index++;
+          }
+        }
+      } while (!isSolvable()); // Ensure solvability
+
+      renderGrid();
+      messageDisplay.textContent = ""; // Clear message when shuffling
+    }
+
+    // Check if the puzzle is solvable
+    function isSolvable() {
+      const flatTiles = tiles
+        .filter((tile) => tile) // Remove the empty tile
+        .map((tile) => tile.value);
+
+      let inversions = 0;
+      for (let i = 0; i < flatTiles.length; i++) {
+        for (let j = i + 1; j < flatTiles.length; j++) {
+          if (flatTiles[i] > flatTiles[j]) {
+            inversions++;
+          }
+        }
+      }
+
+      return inversions % 2 === 0; // Solvable if inversions are even
+    }
+
+    // Check if the puzzle is solved
+    function isSolved() {
+      let index = 0;
+      for (let row = 0; row < gridSize; row++) {
+        for (let col = 0; col < gridSize; col++) {
+          const tile = tiles.find((t) => t && t.x === row && t.y === col);
+          if (tile && tile.value !== index + 1) {
+            return false;
+          }
+          index++;
+        }
+      }
+      return true;
+    }
+
+    // Start game
+    function startGame() {
+      playerName = playerNameInput.value;
+      if (!playerName) {
+        messageDisplay.textContent = "Please enter your name to start!";
+        return;
+      }
+
+      playerNameInput.style.display = "none";
+      startGameBtn.style.display = "none";
+      clearLeaderboardBtn.style.display = "none";
+      scoreboardDiv.style.display = "none";
+
+      initializeGrid();
+      timeElapsed = 0;
+      timeDisplay.textContent = timeElapsed;
+
+      timerInterval = setInterval(() => {
+        timeElapsed++;
+        timeDisplay.textContent = timeElapsed;
+      }, 1000);
+
+      shuffleGrid();
+    }
+
+    // Save score to local storage without time
+    function saveScore() {
+      const score = {
+        name: playerName,
+        date: new Date().toLocaleDateString(),
+        time: timeElapsed // Include time in leaderboard
+      };
+
+      let scores = JSON.parse(localStorage.getItem("scores")) || [];
+      scores.push(score);
+      scores.sort((a, b) => a.name.localeCompare(b.name)); // Sort by name
+      localStorage.setItem("scores", JSON.stringify(scores));
+    }
+
+    // Load and display scoreboard
+    function loadScoreboard() {
+      const scores = JSON.parse(localStorage.getItem("scores")) || [];
+      scoreList.innerHTML = "";
+
+      scores.forEach((score) => {
+        const scoreItem = document.createElement("div");
+        scoreItem.classList.add("scoreboard-item");
+
+        scoreItem.innerHTML = `
+          <span>${score.name}</span>
+          <span class="date">${score.date}</span>
+          <span class="time">${score.time} seconds</span>
+        `;
+
+        scoreList.appendChild(scoreItem);
+      });
+
+      scoreboardDiv.style.display = "block";
+    }
+
+    // Clear leaderboard with password
+    function clearLeaderboard() {
+      const enteredPassword = prompt("Enter password to clear leaderboard:");
+
+      if (enteredPassword === password) {
+        localStorage.removeItem("scores");
+        loadScoreboard(); // Reload to display the updated scoreboard
+      } else {
+        alert("Incorrect password!");
+      }
+    }
+
+    // Event listeners
+    startGameBtn.addEventListener("click", startGame);
+    quitButton.addEventListener("click", () => location.reload()); // Reload the page to quit
+    scoreboardBtn.addEventListener("click", loadScoreboard);
+    clearLeaderboardBtn.addEventListener("click", clearLeaderboard);
+
+  </script>
+</body>
+</html>
